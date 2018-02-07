@@ -2,10 +2,13 @@ import * as _ from 'lodash'
 import * as utils from './utils'
 import parseOrderbookOrder from './parse/orderbook-order'
 import {validate} from '../common'
-import {OrderSpecification} from './types'
-import {Amount, Issue} from '../common/types/objects'
+import {
+  Amount,
+  Issue,
+  FormattedOrderSpecification
+} from '../common/types/objects'
 import {RippleAPI} from '../api'
-import {OfferCreateTransaction} from '../common/types/objects'
+import {OfferCreateTransaction} from '../transaction/types'
 
 export type OrdersOptions = {
   limit?: number,
@@ -17,7 +20,7 @@ type Orderbook = {
   counter: Issue
 }
 type OrderbookItem = {
-   specification: OrderSpecification,
+   specification: FormattedOrderSpecification,
    properties: {
     maker: string,
     sequence: number,

@@ -1,3 +1,5 @@
+import {Amount} from "./amounts"
+
 
 export type Adjustment = {
   address: string,

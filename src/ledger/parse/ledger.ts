@@ -1,7 +1,7 @@
 import * as _ from 'lodash'
 import {removeUndefined, rippleTimeToISO8601} from '../../common'
 import parseTransaction from './transaction'
-import {GetLedger} from '../types'
+import {FormattedLedger} from '../../common/types/objects'
 
 function parseTransactionWrapper(ledgerVersion, tx) {
   const transaction = _.assign({}, _.omit(tx, 'metaData'), {
@@ -39,7 +39,7 @@ function parseState(state) {
   return {rawState: JSON.stringify(state)}
 }
 
-function parseLedger(ledger: any): GetLedger {
+function parseLedger(ledger: any): FormattedLedger {
   const ledgerVersion = parseInt(ledger.ledger_index || ledger.seqNum, 10)
   return removeUndefined(Object.assign({
     stateHash: ledger.account_hash,

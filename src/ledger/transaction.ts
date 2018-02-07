@@ -3,12 +3,20 @@ import * as utils from './utils'
 import parseTransaction from './parse/transaction'
 import {validate, errors} from '../common'
 import {Connection} from '../common'
-import {
-  TransactionType, TransactionResponse, TransactionOptions
-} from './transaction-types'
+import {RippleAPI} from '../api'
+import {ensureLedgerVersion} from './utils'
+import {TxResponse} from '../common/types/commands/tx'
+import {FormattedTransactionType} from '../transaction/types'
+import {LedgerResponse} from '../common/types/commands/index'
 
-function attachTransactionDate(connection: Connection, tx: any
-): Promise<TransactionType> {
+type GetTransactionOptions = {
+  minLedgerVersion?: number,
+  maxLedgerVersion?: number
+}
+
+async function attachTransactionDate(
+  api: RippleAPI, tx: any
+): Promise<TxResponse> {
   if (tx.date) {
     return Promise.resolve(tx)
   }
@@ -22,32 +30,26 @@ function attachTransactionDate(connection: Connection, tx: any
     })
   }
 
-  const request = {
-    command: 'ledger',
-    ledger_index: ledgerVersion
-  }
-
-  return connection.request(request).then(data => {
-    if (typeof data.ledger.close_time === 'number') {
-      return _.assign({date: data.ledger.close_time}, tx)
-    }
-    throw new errors.UnexpectedError('Ledger missing close_time')
-  }).catch(error => {
-    if (error instanceof errors.UnexpectedError) {
-      throw error
-    }
+  let response: LedgerResponse
+  try {
+    response = await api._request('ledger', {ledger_index: ledgerVersion})
+  } catch (err) {
     throw new errors.NotFoundError('Transaction ledger not found')
-  })
+  }
+  if (typeof response.ledger.close_time !== 'number') {
+    throw new errors.UnexpectedError('Ledger missing close_time')
+  }
+  return _.assign({date: response.ledger.close_time}, tx)
 }
 
-function isTransactionInRange(tx: any, options: TransactionOptions) {
+function isTransactionInRange(tx: any, options: GetTransactionOptions) {
   return (!options.minLedgerVersion
           || tx.ledger_index >= options.minLedgerVersion)
       && (!options.maxLedgerVersion
           || tx.ledger_index <= options.maxLedgerVersion)
 }
 
-function convertError(connection: Connection, options: TransactionOptions,
+function convertError(connection: Connection, options: GetTransactionOptions,
   error: Error
 ): Promise<Error> {
   const _error = (error.message === 'txnNotFound') ?
@@ -70,34 +72,32 @@ function convertError(connection: Connection, options: TransactionOptions,
   return Promise.resolve(_error)
 }
 
-function formatResponse(options: TransactionOptions, tx: TransactionResponse
-): TransactionType {
+function formatResponse(options: GetTransactionOptions, tx: TxResponse
+): FormattedTransactionType {
   if (tx.validated !== true || !isTransactionInRange(tx, options)) {
   throw new errors.NotFoundError('Transaction not found')
   }
   return parseTransaction(tx)
 }
 
-function getTransaction(id: string, options: TransactionOptions = {}
-): Promise<TransactionType> {
-  validate.getTransaction({id, options})
-
-  const request = {
-    command: 'tx',
-    transaction: id,
-    binary: false
+async function getTransaction(
+  this: RippleAPI, id: string, options: GetTransactionOptions = {}
+): Promise<FormattedTransactionType> {
+  try {
+    // 1. Validate
+    validate.getTransaction({id, options})
+    options = await ensureLedgerVersion.call(this, options)
+    // 2. Make Request
+    const response = await this._request('tx', {
+      transaction: id,
+      binary: false
+    })
+    const responseWithDate = await attachTransactionDate(this, response)
+    // 3. Return Formatted Response
+    return formatResponse(options, responseWithDate)
+  } catch (err) {
+    throw await convertError(this.connection, options, err)
   }
-
-  return utils.ensureLedgerVersion.call(this, options).then(_options => {
-    return this.connection.request(request).then((tx: TransactionResponse) =>
-      attachTransactionDate(this.connection, tx)
-    ).then(_.partial(formatResponse, _options))
-      .catch(error => {
-        return convertError(this.connection, _options, error).then(_error => {
-          throw _error
-        })
-      })
-  })
 }
 
 export default getTransaction

@@ -1,29 +1,12 @@
 import * as _ from 'lodash'
 import parseFields from './parse/fields'
 import {validate, constants} from '../common'
+import {FormattedSettings} from '../common/types/objects/settings'
 const AccountFlags = constants.AccountFlags
 
 type SettingsOptions = {
   ledgerVersion?: number
 }
-
-type GetSettings = {
-  passwordSpent?: boolean,
-  requireDestinationTag?: boolean,
-  requireAuthorization?: boolean,
-  disallowIncomingXRP?: boolean,
-  disableMasterKey?: boolean,
-  enableTransactionIDTracking?: boolean,
-  noFreeze?: boolean,
-  globalFreeze?: boolean,
-  defaultRipple?: boolean,
-  emailHash?: string|null,
-  messageKey?: string,
-  domain?: string,
-  transferRate?: number|null,
-  regularKey?: string
-}
-
 
 function parseFlags(value) {
   const settings = {}
@@ -42,18 +25,18 @@ function formatSettings(response) {
   return _.assign({}, parsedFlags, parsedFields)
 }
 
-function getSettings(address: string, options: SettingsOptions = {}
-): Promise<GetSettings> {
+async function getSettings(address: string, options: SettingsOptions = {}
+): Promise<FormattedSettings> {
+  // 1. Validate
   validate.getSettings({address, options})
-
-  const request = {
-    command: 'account_info',
+  // 2. Make Request
+  const response = await this._request('account_info', {
     account: address,
     ledger_index: options.ledgerVersion || 'validated',
     signer_lists: true
-  }
-
-  return this.connection.request(request).then(formatSettings)
+  })
+  // 3. Return Formatted Response
+  return formatSettings(response)
 }
 
 export default getSettings
